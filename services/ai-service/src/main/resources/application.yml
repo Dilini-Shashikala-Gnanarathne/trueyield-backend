@@ -1,0 +1,66 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: ai-service
+
+  # Allow large multipart uploads (audio files)
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# ──────────────────────────────────────────────────────────
+# Gemini API configuration (key from environment variable)
+# ──────────────────────────────────────────────────────────
+gemini:
+  api:
+    key: ${GEMINI_API_KEY}
+    base-url: https://generativelanguage.googleapis.com/v1beta
+    model: ${GEMINI_MODEL:gemini-3.6-flash}
+    timeout-seconds: 30
+    retry:
+      max-attempts: 3         # Total attempts (1 initial + 2 retries)
+      initial-delay-ms: 1000  # ~1 s before first retry; doubles each attempt + jitter
+
+# ──────────────────────────────────────────────────────────
+# Local Whisper STT service
+# ──────────────────────────────────────────────────────────
+whisper:
+  url: ${WHISPER_URL:http://localhost:9000}
+  model: ${WHISPER_MODEL:base}        # tiny | base | small | medium
+  language: ${WHISPER_LANGUAGE:auto}  # ISO-639-1 code or "auto" for detection
+  timeout-seconds: 60                 # Transcription can take longer than a normal HTTP request
+
+# ──────────────────────────────────────────────────────────
+# FFmpeg
+# ──────────────────────────────────────────────────────────
+ffmpeg:
+  # Full path used as default so Spring Boot finds FFmpeg without any env var setup.
+  # Override via FFMPEG_PATH env var (Docker, CI, or other OS).
+  path: ${FFMPEG_PATH:C:\Users\SHASHI\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe}
+
+# ──────────────────────────────────────────────────────────
+# Voice upload limits (enforced in VoiceListingService)
+# ──────────────────────────────────────────────────────────
+voice:
+  max-file-size-mb: ${VOICE_MAX_FILE_SIZE_MB:10}
+
+# ──────────────────────────────────────────────────────────
+# Actuator
+# ──────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.trueyield.ai: INFO    # Use DEBUG locally for full transcript logging
+    org.springframework.web: INFO
