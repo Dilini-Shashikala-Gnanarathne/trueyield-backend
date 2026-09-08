@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: marketplace-service
+
+  datasource:
+    url:      ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/trueyield}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate       # Schema managed by init.sql; validate on startup
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+# ──────────────────────────────────────────────────────────
+# Actuator
+# ──────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.trueyield.marketplace: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
