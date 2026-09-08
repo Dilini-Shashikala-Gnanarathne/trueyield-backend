@@ -1,0 +1,128 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────────────────
+  # PostgreSQL
+  # ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: trueyield-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-trueyield}
+      POSTGRES_USER:     ${POSTGRES_USER:-trueyield_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trueyield_pass}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trueyield_user} -d ${POSTGRES_DB:-trueyield}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Marketplace Service  (port 8082)
+  # ─────────────────────────────────────────────────────────
+  marketplace-service:
+    build:
+      context: ./services/marketplace-service
+      dockerfile: Dockerfile
+    container_name: trueyield-marketplace
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${POSTGRES_DB:-trueyield}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-trueyield_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-trueyield_pass}
+      SERVER_PORT: 8082
+    ports:
+      - "${MARKETPLACE_SERVICE_PORT:-8082}:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Whisper STT Service  (port 9000) — local speech-to-text
+  # ─────────────────────────────────────────────────────────
+  whisper-service:
+    build:
+      context: ./whisper-service
+      dockerfile: Dockerfile
+    container_name: trueyield-whisper
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL:    ${WHISPER_MODEL:-base}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-auto}
+      FFMPEG_PATH:      ffmpeg
+      PORT:             9000
+    ports:
+      - "${WHISPER_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s   # Allow time for model loading
+      retries: 3
+
+  # ─────────────────────────────────────────────────────────
+  # AI Service  (port 8081)
+  # ─────────────────────────────────────────────────────────
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: trueyield-ai
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL:   ${GEMINI_MODEL:-gemini-3.6-flash}
+      WHISPER_URL:    http://whisper-service:9000
+      FFMPEG_PATH:    ffmpeg
+      SERVER_PORT:    8081
+    ports:
+      - "${AI_SERVICE_PORT:-8081}:8081"
+    depends_on:
+      whisper-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # API Gateway  (port 8080) — entry point for the frontend
+  # ─────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: trueyield-gateway
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_URL:          http://ai-service:8081
+      MARKETPLACE_SERVICE_URL: http://marketplace-service:8082
+      SERVER_PORT: 8080
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      ai-service:
+        condition: service_healthy
+      marketplace-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
