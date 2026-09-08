@@ -1,0 +1,64 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # ──────────────────────────────────────────────────────
+      # Global CORS – allow the React dev server
+      # ──────────────────────────────────────────────────────
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:4173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+      # ──────────────────────────────────────────────────────
+      # Routes
+      # ──────────────────────────────────────────────────────
+      routes:
+        # AI Service route
+        - id: ai-service
+          uri: ${AI_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/ai/**
+          filters:
+            - name: RequestSize
+              args:
+                maxSize: 50MB    # allow large audio uploads
+
+        # Marketplace Service route
+        - id: marketplace-service
+          uri: ${MARKETPLACE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/marketplace/**
+
+# ──────────────────────────────────────────────────────────
+# Actuator
+# ──────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.trueyield: DEBUG
